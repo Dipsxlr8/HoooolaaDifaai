@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Januar test</title>
+    <title>AI Tracker Portrait 9:16</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
@@ -14,26 +14,231 @@
         body {
             margin: 0;
             padding: 0;
-            background-color: #121212;
+            background-color: #000;
             color: white;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
-            overflow-x: hidden;
+            overflow: hidden; /* Mencegah scroll */
+            height: 100vh;
         }
 
-        /* --- STYLING UNTUK INTRO SCREEN (Sesuai Gambar) --- */
+        /* --- INTRO SCREEN (9:16 Style) --- */
         #intro-overlay {
             position: fixed;
             top: 0;
             left: 0;
-            width: 100vw;
-            height: 100vh;
-            background-color: #191919;
+            width: 100%;
+            height: 100%;
+            background-color: #121212;
             z-index: 9999;
             display: flex;
             flex-direction: column;
+            align-items: center;
+            justify-content: space-between; /* Menyebar elemen ke atas & bawah */
+            padding: 40px 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        .status-top {
+            width: 85%;
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 13px;
+            backdrop-filter: blur(5px);
+            text-align: center;
+        }
+
+        .ig-box {
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 25px;
+            border-radius: 20px;
+            text-align: center;
+            border: 1px solid #333;
+        }
+
+        .ig-box h3 { margin: 0; font-size: 18px; }
+        .ig-box p { color: #aaa; margin-top: 10px; }
+
+        .audio-player-container {
+            width: 85%;
+            background: #222;
+            padding: 10px;
+            border-radius: 50px;
+        }
+        audio { width: 100%; height: 35px; }
+
+        /* --- TRACKER UTAMA (9:16) --- */
+        #main-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: none; /* Muncul setelah intro */
+        }
+
+        video { display: none; }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* Agar video memenuhi layar HP */
+            transform: scaleX(-1); /* Mirror */
+        }
+
+        .ui-overlay {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 15px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .gesture-text {
+            font-size: 20px;
+            font-weight: bold;
+            color: #00ffcc;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="intro-overlay">
+        <div class="status-top">
+            📊 Status: 📷 Kamera aktif - Mundur sedikit agar seluruh badan terlihat
+        </div>
+
+        <div class="ig-box">
+            <h3>🔁 Follow ig gw dips_aja.</h3>
+            <p>tunggu <span id="countdown">5</span> detik</p>
+        </div>
+
+        <div class="audio-player-container">
+            <audio controls>
+                <source src="musik_kamu.mp3" type="audio/mpeg">
+            </audio>
+        </div>
+    </div>
+
+    <div id="main-container">
+        <video class="input_video"></video>
+        <canvas class="output_canvas"></canvas>
+
+        <div class="ui-overlay">
+            <div style="font-size: 12px; color: #aaa; margin-bottom: 5px;">GESTURE TERDETEKSI</div>
+            <div class="gesture-text" id="gesture-output">Menyiapkan AI...</div>
+        </div>
+    </div>
+
+    <script>
+        // --- TIMER & TRANSISI ---
+        let timeLeft = 5;
+        const countdownElem = document.getElementById('countdown');
+        const introOverlay = document.getElementById('intro-overlay');
+        const mainContainer = document.getElementById('main-container');
+
+        const timer = setInterval(() => {
+            timeLeft--;
+            countdownElem.innerText = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                introOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    introOverlay.style.display = 'none';
+                    mainContainer.style.display = 'block';
+                }, 500);
+            }
+        }, 1000);
+
+        // --- AI LOGIC ---
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const gestureOutput = document.getElementById('gesture-output');
+
+        // Sesuaikan ukuran canvas ke resolusi portrait 9:16
+        canvasElement.width = 720;
+        canvasElement.height = 1280;
+
+        function detectHandGesture(landmarks) {
+            if (!landmarks) return null;
+            const isThumbOpen = landmarks[4].x < landmarks[3].x;
+            const isIndexOpen = landmarks[8].y < landmarks[6].y;
+            const isMiddleOpen = landmarks[12].y < landmarks[10].y;
+            const isPinkyOpen = landmarks[20].y < landmarks[18].y;
+
+            if (isIndexOpen && isMiddleOpen && !isPinkyOpen) return "Peace ✌️";
+            if (isIndexOpen && isPinkyOpen && !isMiddleOpen) return "Metal 🤘";
+            if (!isIndexOpen && !isMiddleOpen && !isPinkyOpen) return "Mengepal ✊";
+            return "Tangan Terbuka 🖐️";
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let detected = [];
+
+            // Draw Pose (Body)
+            if (results.poseLandmarks) {
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FFCC', lineWidth: 4});
+                drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF3366', lineWidth: 2, radius: 3});
+            }
+
+            // Draw & Detect Hands
+            if (results.leftHandLandmarks) {
+                drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {color: '#FFFFFF', lineWidth: 3});
+                const g = detectHandGesture(results.leftHandLandmarks);
+                if(g) detected.push(g);
+            }
+            if (results.rightHandLandmarks) {
+                drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS, {color: '#FFFFFF', lineWidth: 3});
+                const g = detectHandGesture(results.rightHandLandmarks);
+                if(g) detected.push(g);
+            }
+
+            // Draw Face
+            if (results.faceLandmarks) {
+                drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {color: '#EEEEEE20', lineWidth: 1});
+            }
+
+            gestureOutput.innerText = detected.length > 0 ? detected.join(" | ") : "Berpose lah...";
+            canvasCtx.restore();
+        }
+
+        const holistic = new Holistic({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
+        }});
+        
+        holistic.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        
+        holistic.onResults(onResults);
+
+        // Kamera diatur ke aspect ratio portrait (ideal untuk HP)
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await holistic.send({image: videoElement});
+            },
+            width: 720,
+            height: 1280
+        });
+        camera.start();
+    </script>
+</body>
+</html>
             align-items: center;
             justify-content: center;
             transition: opacity 0.5s ease;
