@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Januar test</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #121212;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        /* --- STYLING UNTUK INTRO SCREEN (Sesuai Gambar) --- */
+        #intro-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #191919;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+        
+        .status-top {
+            position: absolute;
+            top: 40px;
+            width: 90%;
+            max-width: 400px;
+            background-color: #000000;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #eaeaea;
+            display: flex;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .ig-box {
+            background-color: #050505;
+            padding: 30px 40px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        .ig-box h3 {
+            margin: 0 0 10px 0;
+            font-size: 22px;
+            font-weight: normal;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ig-box p {
+            margin: 0;
+            color: #888;
+            font-size: 14px;
+        }
+
+        .audio-player-container {
+            position: absolute;
+            bottom: 50px;
+            width: 90%;
+            max-width: 400px;
+            background-color: #2a2a2a;
+            padding: 10px;
+            border-radius: 30px;
+        }
+
+        audio {
+            width: 100%;
+            height: 40px;
+            outline: none;
+        }
+
+        /* --- STYLING UNTUK TRACKER UTAMA --- */
+        .container {
+            position: relative;
+            margin-top: 20px;
+            display: none; /* Disembunyikan dulu sampai intro selesai */
+        }
+        video { display: none; }
+        canvas {
+            border: 3px solid #00ffcc;
+            border-radius: 10px;
+            background-color: #000;
+            transform: scaleX(-1);
+            max-width: 100%;
+        }
+        .status-box {
+            margin-top: 20px;
+            padding: 20px;
+            background: #222;
+            border-radius: 10px;
+            text-align: center;
+            width: 90%;
+            max-width: 600px;
+            display: none; /* Disembunyikan dulu */
+        }
+        h1 { margin-top: 20px; color: #00ffcc; display: none; text-align: center; font-size: 24px;}
+        h2 { margin: 0 0 10px 0; color: #00ffcc; font-size: 18px;}
+        .gesture-text { font-size: 20px; font-weight: bold; color: #ffeb3b; }
+    </style>
+</head>
+<body>
+
+    <div id="intro-overlay">
+        <div class="status-top">
+            📊 Status: 📷 Kamera aktif - Hadapkan wajah ke kamera
+        </div>
+
+        <div class="ig-box">
+            <h3>🔁 Follow ig gw dips_aja.</h3>
+            <p>tunggu <span id="countdown">5</span> detik</p>
+        </div>
+
+        <div class="audio-player-container">
+            <audio controls>
+                <source src="musik_kamu.mp3" type="audio/mpeg">
+                Browser tidak mendukung audio.
+            </audio>
+        </div>
+    </div>
+    <h1 id="main-title">🤖 Full Body & Gesture Tracking</h1>
+    
+    <div class="container" id="main-tracker">
+        <video class="input_video" width="640" height="480" autoplay playsinline></video>
+        <canvas class="output_canvas" width="640" height="480"></canvas>
+    </div>
+
+    <div class="status-box" id="main-status">
+        <h2>Deteksi Gesture</h2>
+        <div class="gesture-text" id="gesture-output">Mendeteksi... Menunggu posisi Anda</div>
+    </div>
+
+    <script>
+        // --- LOGIKA INTRO SCREEN & COUNTDOWN ---
+        let timeLeft = 5; // Waktu tunggu 5 detik
+        const countdownElement = document.getElementById('countdown');
+        const introOverlay = document.getElementById('intro-overlay');
+        const mainTracker = document.getElementById('main-tracker');
+        const mainStatus = document.getElementById('main-status');
+        const mainTitle = document.getElementById('main-title');
+
+        const timer = setInterval(() => {
+            timeLeft--;
+            countdownElement.innerText = timeLeft;
+            
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                // Efek fade out untuk intro
+                introOverlay.style.opacity = '0';
+                setTimeout(() => {
+                    introOverlay.style.display = 'none';
+                    // Tampilkan UI Tracker
+                    mainTracker.style.display = 'block';
+                    mainStatus.style.display = 'block';
+                    mainTitle.style.display = 'block';
+                }, 500); // Tunggu setengah detik agar transisi mulus
+            }
+        }, 1000);
+
+
+        // --- LOGIKA AI TRACKING MEDIAPIPE ---
+        const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const gestureOutput = document.getElementById('gesture-output');
+
+        function detectHandGesture(landmarks, handLabel) {
+            if (!landmarks) return null;
+
+            const isThumbOpen = landmarks[4].x < landmarks[3].x;
+            const isIndexOpen = landmarks[8].y < landmarks[6].y;
+            const isMiddleOpen = landmarks[12].y < landmarks[10].y;
+            const isRingOpen = landmarks[16].y < landmarks[14].y;
+            const isPinkyOpen = landmarks[20].y < landmarks[18].y;
+
+            if (!isThumbOpen && !isIndexOpen && !isMiddleOpen && !isRingOpen && !isPinkyOpen) {
+                return "Batu / Mengepal ✊";
+            } else if (isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen) {
+                return "Peace ✌️";
+            } else if (!isIndexOpen && isMiddleOpen && !isRingOpen && !isPinkyOpen) {
+                return "Jari Tengah 🖕"; 
+            } else if (isIndexOpen && !isMiddleOpen && !isRingOpen && isPinkyOpen) {
+                return "Metal / Horns 🤘";
+            } else if (isThumbOpen && isIndexOpen && isMiddleOpen && isRingOpen && isPinkyOpen) {
+                return "Tangan Terbuka 🖐️";
+            }
+            return null;
+        }
+
+        function detectBodyGesture(poseLandmarks) {
+            if (!poseLandmarks) return null;
+
+            const leftWrist = poseLandmarks[15];
+            const rightWrist = poseLandmarks[16];
+            const leftShoulder = poseLandmarks[11];
+            const rightShoulder = poseLandmarks[12];
+            const leftEar = poseLandmarks[7];
+            const rightEar = poseLandmarks[8];
+
+            if (leftWrist.visibility > 0.5 && rightWrist.visibility > 0.5) {
+                const isCrossed = leftWrist.x < rightWrist.x;
+                const atChestHeight = leftWrist.y > leftShoulder.y && rightWrist.y > rightShoulder.y;
+                if (isCrossed && atChestHeight) {
+                    return "Tangan Menyilang 🙅";
+                }
+            }
+
+            if (leftWrist.visibility > 0.5 && rightWrist.visibility > 0.5) {
+                const leftHandOnHead = leftWrist.y < leftShoulder.y && Math.abs(leftWrist.y - leftEar.y) < 0.15;
+                const rightHandOnHead = rightWrist.y < rightShoulder.y && Math.abs(rightWrist.y - rightEar.y) < 0.15;
+                
+                if (leftHandOnHead && rightHandOnHead) {
+                    return "Pegang Kepala 🙆";
+                }
+            }
+
+            return null;
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            let detectedGesture = [];
+
+            if (results.poseLandmarks) {
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
+                drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
+                const bodyGesture = detectBodyGesture(results.poseLandmarks);
+                if (bodyGesture) detectedGesture.push(bodyGesture);
+            }
+
+            if (results.leftHandLandmarks) {
+                drawConnectors(canvasCtx, results.leftHandLandmarks, HAND_CONNECTIONS, {color: '#CC0000', lineWidth: 5});
+                drawLandmarks(canvasCtx, results.leftHandLandmarks, {color: '#00FF00', lineWidth: 2});
+                const leftGesture = detectHandGesture(results.leftHandLandmarks, 'Kiri');
+                if (leftGesture) detectedGesture.push("Kiri: " + leftGesture);
+            }
+
+            if (results.rightHandLandmarks) {
+                drawConnectors(canvasCtx, results.rightHandLandmarks, HAND_CONNECTIONS, {color: '#00CC00', lineWidth: 5});
+                drawLandmarks(canvasCtx, results.rightHandLandmarks, {color: '#FF0000', lineWidth: 2});
+                const rightGesture = detectHandGesture(results.rightHandLandmarks, 'Kanan');
+                if (rightGesture) detectedGesture.push("Kanan: " + rightGesture);
+            }
+
+            if (results.faceLandmarks) {
+                drawConnectors(canvasCtx, results.faceLandmarks, FACEMESH_TESSELATION, {color: '#C0C0C070', lineWidth: 1});
+            }
+
+            if (detectedGesture.length > 0) {
+                gestureOutput.innerText = detectedGesture.join(" | ");
+            } else {
+                gestureOutput.innerText = "Tidak ada gesture khusus yang terdeteksi";
+            }
+
+            canvasCtx.restore();
+        }
+
+        const holistic = new Holistic({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`;
+        }});
+        
+        holistic.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            enableSegmentation: false,
+            refineFaceLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+        
+        holistic.onResults(onResults);
+
+        // Kamera langsung menyala di latar belakang saat intro muncul
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await holistic.send({image: videoElement});
+            },
+            width: 640,
+            height: 480
+        });
+        camera.start();
+    </script>
+</body>
+</html>
